@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Колесо профессий</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: url('img/bg.png') center/cover no-repeat fixed;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        h1 {
+            color: white;
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 8px rgba(0,0,0,0.5);
+        }
+
+        .wheel-container {
+            position: relative;
+            width: 650px;
+            height: 650px;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            filter: drop-shadow(0 10px 30px rgba(0,0,0,0.4));
+        }
+
+        .pointer {
+            position: absolute;
+            top: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 25px solid transparent;
+            border-right: 25px solid transparent;
+            border-top: 50px solid #ff4757;
+            z-index: 10;
+            filter: drop-shadow(0 3px 6px rgba(0,0,0,0.4));
+        }
+
+        .spin-btn {
+            margin-top: 30px;
+            padding: 18px 60px;
+            font-size: 1.6rem;
+            font-weight: bold;
+            color: white;
+            background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 5px 20px rgba(238, 90, 36, 0.4);
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .spin-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(238, 90, 36, 0.6);
+        }
+
+        .spin-btn:active {
+            transform: translateY(0);
+        }
+
+        .spin-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
+        }
+
+        .result-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .result-modal.active {
+            display: flex;
+        }
+
+        .result-content {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
+            animation: popIn 0.5s ease;
+            max-width: 420px;
+        }
+
+        @keyframes popIn {
+            0% { transform: scale(0); opacity: 0; }
+            70% { transform: scale(1.1); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .result-content img {
+            width: 180px;
+            height: 180px;
+            object-fit: contain;
+            margin: 20px 0;
+        }
+
+        .result-content h2 {
+            font-size: 2.2rem;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .result-content p {
+            font-size: 1.2rem;
+            color: #666;
+        }
+
+        .close-btn {
+            margin-top: 20px;
+            padding: 12px 35px;
+            font-size: 1.1rem;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .close-btn:hover {
+            background: #5a6fd6;
+        }
+
+        @media (max-width: 700px) {
+            .wheel-container {
+                width: 400px;
+                height: 400px;
+            }
+            h1 {
+                font-size: 1.5rem;
+            }
+            .spin-btn {
+                padding: 12px 35px;
+                font-size: 1.2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🎡 Колесо профессий</h1>
+
+    <div class="wheel-container">
+        <div class="pointer"></div>
+        <canvas id="wheel" width="650" height="650"></canvas>
+    </div>
+
+    <button class="spin-btn" id="spinBtn" onclick="spin()">Крутить!</button>
+
+    <div class="result-modal" id="resultModal">
+        <div class="result-content">
+            <h2 id="resultTitle"></h2>
+            <img id="resultImg" src="" alt="">
+            <p id="resultText"></p>
+            <button class="close-btn" onclick="closeModal()">Закрыть</button>
+        </div>
+    </div>
+
+    <script>
+        const COLOR_1 = '#CDF22A';
+        const COLOR_2 = '#FA87D6';
+
+        const sectors = [
+            { name: "UX/UI\nдизайнер", color: COLOR_1, img: "img/seal.png" },
+            { name: "Учитель", color: COLOR_2, img: "img/bober.png" },
+            { name: "Угадай,\nкто?", color: COLOR_1, img: null },
+            { name: "Фрилансер", color: COLOR_2, img: "img/cat.png" },
+            { name: "Робототехник", color: COLOR_1, img: "img/girafe.png" },
+            { name: "Химик", color: COLOR_2, img: "img/hamster.png" },
+            { name: "Программист", color: COLOR_1, img: "img/dog.png" },
+            { name: "Битва\nнейронов", color: COLOR_2, img: null }
+        ];
+
+        const canvas = document.getElementById('wheel');
+        const ctx = canvas.getContext('2d');
+        const numSectors = sectors.length;
+        const arcSize = (2 * Math.PI) / numSectors;
+        let currentAngle = 0;
+        let isSpinning = false;
+
+        const images = {};
+        let imagesLoaded = 0;
+
+        sectors.forEach((sector, i) => {
+            if (sector.img) {
+                const img = new Image();
+                img.onload = () => {
+                    images[i] = img;
+                    imagesLoaded++;
+                    drawWheel();
+                };
+                img.src = sector.img;
+            }
+        });
+
+        function drawWheel() {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const radius = canvas.width / 2 - 15;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            sectors.forEach((sector, i) => {
+                const startAngle = currentAngle + i * arcSize;
+                const endAngle = startAngle + arcSize;
+
+                ctx.beginPath();
+                ctx.moveTo(centerX, centerY);
+                ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+                ctx.closePath();
+                ctx.fillStyle = sector.color;
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+                ctx.lineWidth = 4;
+                ctx.stroke();
+
+                ctx.save();
+                ctx.translate(centerX, centerY);
+                ctx.rotate(startAngle + arcSize / 2);
+
+                const textRadius = radius * 0.62;
+                ctx.fillStyle = '#333';
+                ctx.font = 'bold 20px Segoe UI, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+
+                const lines = sector.name.split('\n');
+                if (lines.length === 1) {
+                    ctx.fillText(sector.name, textRadius, 0);
+                } else {
+                    lines.forEach((line, li) => {
+                        ctx.fillText(line, textRadius, (li - (lines.length - 1) / 2) * 24);
+                    });
+                }
+
+                if (images[i]) {
+                    const imgSize = 65;
+                    const imgRadius = radius * 0.33;
+                    ctx.drawImage(
+                        images[i],
+                        imgRadius - imgSize / 2,
+                        -imgSize / 2,
+                        imgSize,
+                        imgSize
+                    );
+                } else if (sector.name.includes("Угадай")) {
+                    ctx.font = 'bold 55px sans-serif';
+                    ctx.fillStyle = '#fff';
+                    ctx.shadowColor = 'rgba(0,0,0,0.3)';
+                    ctx.shadowBlur = 4;
+                    ctx.fillText('?', radius * 0.35, 0);
+                    ctx.shadowBlur = 0;
+                } else if (sector.name.includes("Битва")) {
+                    ctx.font = 'bold 40px sans-serif';
+                    ctx.fillStyle = '#fff';
+                    ctx.shadowColor = 'rgba(0,0,0,0.3)';
+                    ctx.shadowBlur = 4;
+                    ctx.fillText('⚡', radius * 0.35, 0);
+                    ctx.shadowBlur = 0;
+                }
+
+                ctx.restore();
+            });
+
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, 35, 0, 2 * Math.PI);
+            ctx.fillStyle = '#fff';
+            ctx.fill();
+            ctx.strokeStyle = '#ddd';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+        }
+
+        function spin() {
+            if (isSpinning) return;
+            isSpinning = true;
+            document.getElementById('spinBtn').disabled = true;
+
+            const spinDuration = 4000 + Math.random() * 2000;
+            const totalRotation = (5 + Math.random() * 5) * 2 * Math.PI;
+            const startTime = performance.now();
+            const startAngle = currentAngle;
+
+            function easeOut(t) {
+                return 1 - Math.pow(1 - t, 4);
+            }
+
+            function animate(now) {
+                const elapsed = now - startTime;
+                const progress = Math.min(elapsed / spinDuration, 1);
+                const easedProgress = easeOut(progress);
+
+                currentAngle = startAngle + totalRotation * easedProgress;
+                drawWheel();
+
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                } else {
+                    isSpinning = false;
+                    document.getElementById('spinBtn').disabled = false;
+                    showResult();
+                }
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        function showResult() {
+            // ✅ ИСПРАВЛЕННАЯ ФОРМУЛА
+            // Указатель находится сверху (12 часов = угол 3π/2 в системе canvas)
+            // Находим угол указателя относительно текущего поворота колеса
+            const pointerAngle = 3 * Math.PI / 2; // 12 часов
+            const angleInWheel = (pointerAngle - (currentAngle % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+            const sectorIndex = Math.floor(angleInWheel / arcSize) % numSectors;
+
+            const sector = sectors[sectorIndex];
+
+            document.getElementById('resultTitle').textContent = sector.name.replace('\n', ' ');
+            document.getElementById('resultText').textContent = `Выпало: ${sector.name.replace('\n', ' ')}!`;
+
+            const resultImg = document.getElementById('resultImg');
+            if (sector.img && images[sectorIndex]) {
+                resultImg.src = sector.img;
+                resultImg.style.display = 'block';
+            } else {
+                resultImg.style.display = 'none';
+            }
+
+            document.getElementById('resultModal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('resultModal').classList.remove('active');
+        }
+
+        document.getElementById('resultModal').addEventListener('click', function(e) {
+            if (e.target === this) closeModal();
+        });
+
+        drawWheel();
+    </script>
+</body>
+</html>
